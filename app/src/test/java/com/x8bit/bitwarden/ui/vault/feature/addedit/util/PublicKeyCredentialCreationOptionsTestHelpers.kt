@@ -1,6 +1,7 @@
 package com.x8bit.bitwarden.ui.vault.feature.addedit.util
 
-import com.x8bit.bitwarden.data.autofill.fido2.datasource.network.model.PublicKeyCredentialCreationOptions
+import com.x8bit.bitwarden.data.autofill.fido2.model.PublicKeyCredentialCreationOptions
+import com.x8bit.bitwarden.data.autofill.fido2.model.PublicKeyCredentialDescriptor
 
 /**
  * Returns a mock FIDO 2 [PublicKeyCredentialCreationOptions] object to simulate a credential
@@ -15,7 +16,7 @@ fun createMockPublicKeyCredentialCreationOptions(
         .AuthenticatorSelectionCriteria(userVerification = userVerificationRequirement),
     challenge = "mockPublicKeyCredentialCreationOptionsChallenge-$number",
     excludeCredentials = listOf(
-        PublicKeyCredentialCreationOptions.PublicKeyCredentialDescriptor(
+        PublicKeyCredentialDescriptor(
             type = "mockPublicKeyCredentialDescriptorType-$number",
             id = "mockPublicKeyCredentialDescriptorId-$number",
             transports = listOf("mockPublicKeyCredentialDescriptorTransports-$number"),
@@ -37,3 +38,26 @@ fun createMockPublicKeyCredentialCreationOptions(
         displayName = "mockPublicKeyCredentialUserEntityDisplayName-$number",
     ),
 )
+
+// dictionary PublicKeyCredentialRequestOptions {
+//    required BufferSource                challenge;
+//    unsigned long                        timeout;
+//    USVString                            rpId;
+//    sequence<PublicKeyCredentialDescriptor> allowCredentials = [];
+//    DOMString                            userVerification = "preferred";
+//    AuthenticationExtensionsClientInputs extensions;
+//};
+
+// dictionary PublicKeyCredentialCreationOptions {
+//    required PublicKeyCredentialRpEntity         rp;
+//    required PublicKeyCredentialUserEntity       user;
+//
+//    required BufferSource                             challenge;
+//    required sequence<PublicKeyCredentialParameters>  pubKeyCredParams;
+//
+//    unsigned long                                timeout;
+//    sequence<PublicKeyCredentialDescriptor>      excludeCredentials = [];
+//    AuthenticatorSelectionCriteria               authenticatorSelection;
+//    DOMString                                    attestation = "none";
+//    AuthenticationExtensionsClientInputs         extensions;
+//};

@@ -1,7 +1,7 @@
 package com.x8bit.bitwarden.ui.vault.feature.addedit.util
 
-import com.x8bit.bitwarden.data.autofill.fido2.datasource.network.model.PublicKeyCredentialCreationOptions
 import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2CredentialRequest
+import com.x8bit.bitwarden.data.autofill.fido2.model.PublicKeyCredentialCreationOptions
 import com.x8bit.bitwarden.data.platform.util.toUriOrNull
 import com.x8bit.bitwarden.ui.platform.base.util.toAndroidAppUriString
 import com.x8bit.bitwarden.ui.vault.feature.addedit.VaultAddEditState

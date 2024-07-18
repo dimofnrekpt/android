@@ -1,5 +1,6 @@
 package com.x8bit.bitwarden.data.vault.datasource.sdk.model
 
+import android.util.Log
 import com.bitwarden.fido.Fido2CredentialAutofillView
 import com.bitwarden.sdk.Fido2CredentialStore
 import com.bitwarden.vault.Cipher
@@ -38,13 +39,17 @@ class Fido2CredentialStoreImpl(
      * @param ripId Relying Party ID to find.
      */
     override suspend fun findCredentials(ids: List<ByteArray>?, ripId: String): List<CipherView> {
+        Log.d("PASSKEY", "findCredentials() called with: ids = $ids, ripId = $ripId")
         val userId = getActiveUserIdOrThrow()
 
         vaultRepository.sync()
+        Log.d("PASSKEY", "findCredentials: sync complete")
 
         val ciphersWithFido2Credentials = vaultRepository.ciphersStateFlow.value.data
             ?.filter { it.isActiveWithFido2Credentials }
             .orEmpty()
+
+        Log.d("PASSKEY", "findCredentials: ciphersWithFido2Credentials = $ciphersWithFido2Credentials")
 
         return vaultSdkSource
             .decryptFido2CredentialAutofillViews(
@@ -52,19 +57,27 @@ class Fido2CredentialStoreImpl(
                 cipherViews = ciphersWithFido2Credentials.toTypedArray(),
             )
             .map { decryptedFido2CredentialViews ->
+                Log.d("PASSKEY", "findCredentials: decryptedFido2CredentialViews = $decryptedFido2CredentialViews")
                 decryptedFido2CredentialViews.filterMatchingCredentials(
                     ids,
                     ripId,
                 )
             }
             .map { matchingFido2Credentials ->
+                Log.d("PASSKEY", "findCredentials: matchingFido2Credentials = $matchingFido2Credentials")
                 ciphersWithFido2Credentials.filter { cipherView ->
                     matchingFido2Credentials.any { it.cipherId == cipherView.id }
                 }
             }
             .fold(
-                onSuccess = { it },
-                onFailure = { throw it },
+                onSuccess = {
+                    Log.d("PASSKEY", "findCredentials: onSuccess $it")
+                    it
+                },
+                onFailure = {
+                    Log.d("PASSKEY", "findCredentials: onFailure $it")
+                    throw it
+                },
             )
     }
 
@@ -72,6 +85,7 @@ class Fido2CredentialStoreImpl(
      * Save the provided [cred] to the users vault.
      */
     override suspend fun saveCredential(cred: Cipher) {
+        Log.d("PASSKEY", "saveCredential() called with: cred = $cred")
         val userId = getActiveUserIdOrThrow()
 
         vaultSdkSource

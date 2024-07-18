@@ -9,8 +9,12 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class PublicKeyCredentialRequestOptions(
-    @SerialName("allowCredentials") val allowCredentials: List<String>?,
-    @SerialName("challenge") val challenge: String,
-    @SerialName("rpId") val relayingPartyId: String?,
-    @SerialName("userVerification") val userVerification: String?,
+    @SerialName("challenge")
+    val challenge: String,
+    @SerialName("allowCredentials")
+    val allowCredentials: List<PublicKeyCredentialDescriptor>?,
+    @SerialName("rpId")
+    val relyingPartyId: String?,
+    @SerialName("userVerification")
+    val userVerification: String?,
 )

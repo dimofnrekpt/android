@@ -13,6 +13,7 @@ import androidx.credentials.exceptions.CreateCredentialUnknownException
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.GetCredentialUnknownException
+import androidx.credentials.exceptions.GetCredentialUnsupportedException
 import androidx.credentials.provider.AuthenticationAction
 import androidx.credentials.provider.BeginCreateCredentialRequest
 import androidx.credentials.provider.BeginCreateCredentialResponse
@@ -30,9 +31,11 @@ import com.x8bit.bitwarden.R
 import com.x8bit.bitwarden.data.auth.repository.AuthRepository
 import com.x8bit.bitwarden.data.auth.repository.model.UserState
 import com.x8bit.bitwarden.data.autofill.fido2.model.PublicKeyCredentialRequestOptions
+import com.x8bit.bitwarden.data.autofill.util.isActiveWithFido2Credentials
 import com.x8bit.bitwarden.data.platform.manager.dispatcher.DispatcherManager
 import com.x8bit.bitwarden.data.platform.util.decodeFromStringOrNull
 import com.x8bit.bitwarden.data.vault.repository.VaultRepository
+import com.x8bit.bitwarden.data.vault.repository.model.DecryptFido2CredentialAutofillViewResult
 import com.x8bit.bitwarden.ui.platform.manager.intent.IntentManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
@@ -56,6 +59,7 @@ class Fido2ProviderProcessorImpl(
     private val fido2CredentialStore: Fido2CredentialStore,
     private val intentManager: IntentManager,
     dispatcherManager: DispatcherManager,
+    private val json: Json,
 ) : Fido2ProviderProcessor {
 
     private val requestCode = AtomicInteger()
@@ -197,29 +201,52 @@ class Fido2ProviderProcessorImpl(
             .beginGetCredentialOptions
             .flatMap { option ->
                 if (option is BeginGetPublicKeyCredentialOption) {
-                    val relayingPartyId = Json
+                    val relyingPartyId = json
                         .decodeFromStringOrNull<PublicKeyCredentialRequestOptions>(
                             option.requestJson,
                         )
-                        ?.relayingPartyId
-                        ?: throw GetCredentialUnknownException("Invalid data.")
+                        ?.relyingPartyId
+                        ?: ""
 
-                    vaultRepository
-                        .silentlyDiscoverCredentials(
-                            userId = userId,
-                            fido2CredentialStore = fido2CredentialStore,
-                            relayingPartyId = relayingPartyId,
-                        )
-                        .fold(
-                            onSuccess = { it.toCredentialEntries(option) },
-                            onFailure = {
-                                throw GetCredentialUnknownException("Error decrypting credentials.")
-                            },
-                        )
+                    //vaultRepository
+                    //    .silentlyDiscoverCredentials(
+                    //        userId,
+                    //        fido2CredentialStore,
+                    //        relyingPartyId,
+                    //    )
+                    //    .fold(
+                    //        onSuccess = { it.toCredentialEntries(option) },
+                    //        onFailure = {
+                    //            throw GetCredentialUnknownException("Error decrypting credentials.")
+                    //        },
+                    //    )
+
+                    buildCredentialEntries(relyingPartyId, option)
                 } else {
-                    throw GetCredentialUnknownException("Unsupported option.")
+                    throw GetCredentialUnsupportedException("Unsupported option.")
                 }
             }
+
+    private suspend fun buildCredentialEntries(
+        relyingPartyId: String,
+        option: BeginGetPublicKeyCredentialOption,
+    ): List<CredentialEntry> {
+        val cipherViews = vaultRepository.vaultDataStateFlow.value.data
+            ?.cipherViewList
+            ?.filter { it.isActiveWithFido2Credentials }
+            ?: emptyList()
+        val result =
+            vaultRepository.getDecryptedFido2CredentialAutofillViews(cipherViews)
+        return when (result) {
+            DecryptFido2CredentialAutofillViewResult.Error -> emptyList()
+            is DecryptFido2CredentialAutofillViewResult.Success -> {
+                result
+                    .fido2CredentialAutofillViews
+                    .filter { it.rpId == relyingPartyId }
+                    .toCredentialEntries(option)
+            }
+        }
+    }
 
     private fun List<Fido2CredentialAutofillView>.toCredentialEntries(
         option: BeginGetPublicKeyCredentialOption,

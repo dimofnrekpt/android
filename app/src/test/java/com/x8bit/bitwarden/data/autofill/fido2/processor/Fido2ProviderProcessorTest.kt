@@ -364,7 +364,7 @@ class Fido2ProviderProcessorTest {
             PublicKeyCredentialRequestOptions(
                 allowCredentials = emptyList(),
                 challenge = "",
-                relayingPartyId = "mockRpId",
+                relyingPartyId = "mockRpId",
                 userVerification = "",
             ),
         )
@@ -412,7 +412,7 @@ class Fido2ProviderProcessorTest {
             PublicKeyCredentialRequestOptions(
                 allowCredentials = emptyList(),
                 challenge = "",
-                relayingPartyId = "mockRpId",
+                relyingPartyId = "mockRpId",
                 userVerification = "",
             ),
         )

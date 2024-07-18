@@ -1,10 +1,10 @@
 package com.x8bit.bitwarden.data.autofill.fido2.manager
 
 import com.bitwarden.vault.CipherView
-import com.x8bit.bitwarden.data.autofill.fido2.datasource.network.model.PublicKeyCredentialCreationOptions
 import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2CredentialRequest
 import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2RegisterCredentialResult
 import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2ValidateOriginResult
+import com.x8bit.bitwarden.data.autofill.fido2.model.PublicKeyCredentialCreationOptions
 
 /**
  * Responsible for managing FIDO 2 credential registration and authentication.

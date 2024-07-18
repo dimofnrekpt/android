@@ -1,5 +1,6 @@
 package com.x8bit.bitwarden.data.vault.datasource.sdk.model
 
+import android.util.Log
 import com.bitwarden.fido.CheckUserOptions
 import com.bitwarden.sdk.CheckUserAndPickCredentialForCreationResult
 import com.bitwarden.sdk.CheckUserResult
@@ -25,7 +26,13 @@ class Fido2CredentialSearchUserInterfaceImpl : Fido2UserInterface {
     override suspend fun checkUserAndPickCredentialForCreation(
         options: CheckUserOptions,
         newCredential: Fido2CredentialNewView,
-    ): CheckUserAndPickCredentialForCreationResult = throw IllegalStateException()
+    ): CheckUserAndPickCredentialForCreationResult {
+        Log.d(
+            "PASSKEY",
+            "checkUserAndPickCredentialForCreation() called with: options = $options, newCredential = $newCredential"
+        )
+        throw IllegalStateException()
+    }
 
     // Always return true for this property because any problems with verification should
     // be handled downstream where the app can actually offer verification methods.
@@ -33,5 +40,11 @@ class Fido2CredentialSearchUserInterfaceImpl : Fido2UserInterface {
 
     override suspend fun pickCredentialForAuthentication(
         availableCredentials: List<CipherView>,
-    ): CipherViewWrapper = throw IllegalStateException()
+    ): CipherViewWrapper {
+        Log.d(
+            "PASSKEY",
+            "pickCredentialForAuthentication() called with: availableCredentials = $availableCredentials"
+        )
+        throw IllegalStateException()
+    }
 }

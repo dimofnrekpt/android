@@ -40,6 +40,7 @@ object Fido2ProviderModule {
         fido2CredentialStore: Fido2CredentialStore,
         dispatcherManager: DispatcherManager,
         intentManager: IntentManager,
+        json: Json,
     ): Fido2ProviderProcessor =
         Fido2ProviderProcessorImpl(
             context,
@@ -48,6 +49,7 @@ object Fido2ProviderModule {
             fido2CredentialStore,
             intentManager,
             dispatcherManager,
+            json,
         )
 
     @Provides
