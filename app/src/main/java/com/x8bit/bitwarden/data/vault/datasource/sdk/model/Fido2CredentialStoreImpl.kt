@@ -45,11 +45,17 @@ class Fido2CredentialStoreImpl(
         vaultRepository.sync()
         Log.d("PASSKEY", "findCredentials: sync complete")
 
-        val ciphersWithFido2Credentials = vaultRepository.ciphersStateFlow.value.data
-            ?.filter { it.isActiveWithFido2Credentials }
+        val ciphersWithFido2Credentials = vaultRepository
+            .ciphersStateFlow
+            .value
+            .data
             .orEmpty()
+            .filter { it.isActiveWithFido2Credentials }
 
-        Log.d("PASSKEY", "findCredentials: ciphersWithFido2Credentials = $ciphersWithFido2Credentials")
+        Log.d(
+            "PASSKEY",
+            "findCredentials: ciphersWithFido2Credentials = $ciphersWithFido2Credentials"
+        )
 
         return vaultSdkSource
             .decryptFido2CredentialAutofillViews(
@@ -57,14 +63,20 @@ class Fido2CredentialStoreImpl(
                 cipherViews = ciphersWithFido2Credentials.toTypedArray(),
             )
             .map { decryptedFido2CredentialViews ->
-                Log.d("PASSKEY", "findCredentials: decryptedFido2CredentialViews = $decryptedFido2CredentialViews")
+                Log.d(
+                    "PASSKEY",
+                    "findCredentials: decryptedFido2CredentialViews = $decryptedFido2CredentialViews"
+                )
                 decryptedFido2CredentialViews.filterMatchingCredentials(
                     ids,
                     ripId,
                 )
             }
             .map { matchingFido2Credentials ->
-                Log.d("PASSKEY", "findCredentials: matchingFido2Credentials = $matchingFido2Credentials")
+                Log.d(
+                    "PASSKEY",
+                    "findCredentials: matchingFido2Credentials = $matchingFido2Credentials"
+                )
                 ciphersWithFido2Credentials.filter { cipherView ->
                     matchingFido2Credentials.any { it.cipherId == cipherView.id }
                 }
@@ -105,6 +117,7 @@ class Fido2CredentialStoreImpl(
      * Return a filtered list containing elements that match the given [relyingPartyId] and a
      * credential ID contained in [credentialIds].
      */
+    @OptIn(ExperimentalStdlibApi::class)
     private fun List<Fido2CredentialAutofillView>.filterMatchingCredentials(
         credentialIds: List<ByteArray>?,
         relyingPartyId: String,
@@ -113,7 +126,7 @@ class Fido2CredentialStoreImpl(
         return filter { fido2CredentialView ->
             fido2CredentialView.rpId == relyingPartyId &&
                 (skipCredentialIdFiltering ||
-                    credentialIds?.contains(fido2CredentialView.credentialId) == true)
+                    credentialIds?.any { it.toHexString() == fido2CredentialView.credentialId.toHexString() } == true)
         }
     }
 }

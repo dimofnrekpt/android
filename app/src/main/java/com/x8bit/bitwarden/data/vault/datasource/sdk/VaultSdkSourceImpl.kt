@@ -1,5 +1,6 @@
 package com.x8bit.bitwarden.data.vault.datasource.sdk
 
+import android.util.Log
 import com.bitwarden.core.DateTime
 import com.bitwarden.core.DerivePinKeyResponse
 import com.bitwarden.core.InitOrgCryptoRequest
@@ -530,6 +531,7 @@ class VaultSdkSourceImpl(
         fido2CredentialStore: Fido2CredentialStore,
         relayingPartyId: String,
     ): Result<List<Fido2CredentialAutofillView>> = runCatching {
+        Log.d("PASSKEY", "silentlyDiscoverCredentials() called")
         getClient(userId)
             .platform()
             .fido2()

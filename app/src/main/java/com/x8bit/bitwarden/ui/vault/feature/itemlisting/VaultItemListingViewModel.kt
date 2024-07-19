@@ -1,6 +1,7 @@
 package com.x8bit.bitwarden.ui.vault.feature.itemlisting
 
 import android.os.Parcelable
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.bitwarden.fido.Fido2CredentialAutofillView
@@ -9,10 +10,12 @@ import com.x8bit.bitwarden.R
 import com.x8bit.bitwarden.data.auth.repository.AuthRepository
 import com.x8bit.bitwarden.data.auth.repository.model.ValidatePasswordResult
 import com.x8bit.bitwarden.data.autofill.fido2.manager.Fido2CredentialManager
+import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2AuthenticateCredentialResult
 import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2CredentialRequest
 import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2RegisterCredentialResult
 import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2ValidateOriginResult
 import com.x8bit.bitwarden.data.autofill.fido2.model.PublicKeyCredentialCreationOptions.AuthenticatorSelectionCriteria.UserVerificationRequirement
+import com.x8bit.bitwarden.data.autofill.fido2.util.Fido2CredentialAssertionRequest
 import com.x8bit.bitwarden.data.autofill.manager.AutofillSelectionManager
 import com.x8bit.bitwarden.data.autofill.model.AutofillSelectionData
 import com.x8bit.bitwarden.data.autofill.util.isActiveWithFido2Credentials
@@ -23,6 +26,7 @@ import com.x8bit.bitwarden.data.platform.manager.clipboard.BitwardenClipboardMan
 import com.x8bit.bitwarden.data.platform.manager.event.OrganizationEventManager
 import com.x8bit.bitwarden.data.platform.manager.model.OrganizationEvent
 import com.x8bit.bitwarden.data.platform.manager.model.SpecialCircumstance
+import com.x8bit.bitwarden.data.platform.manager.util.toFido2AssertionRequestOrNull
 import com.x8bit.bitwarden.data.platform.manager.util.toFido2RequestOrNull
 import com.x8bit.bitwarden.data.platform.repository.EnvironmentRepository
 import com.x8bit.bitwarden.data.platform.repository.SettingsRepository
@@ -98,9 +102,10 @@ class VaultItemListingViewModel @Inject constructor(
         val specialCircumstance = specialCircumstanceManager.specialCircumstance
         val autofillSelectionData = specialCircumstance as? SpecialCircumstance.AutofillSelection
         val fido2CreationData = specialCircumstance as? SpecialCircumstance.Fido2Save
+        val fido2AssertionData = specialCircumstance as? SpecialCircumstance.Fido2Assertion
         val shouldFinishOnComplete = autofillSelectionData
             ?.shouldFinishWhenComplete
-            ?: (fido2CreationData != null)
+            ?: (fido2CreationData != null || fido2AssertionData != null)
         val dialogState = fido2CreationData
             ?.let { VaultItemListingState.DialogState.Loading(R.string.loading.asText()) }
         VaultItemListingState(
@@ -123,6 +128,7 @@ class VaultItemListingViewModel @Inject constructor(
             shouldFinishOnComplete = shouldFinishOnComplete,
             hasMasterPassword = userState.activeAccount.hasMasterPassword,
             fido2CredentialRequest = fido2CreationData?.fido2CredentialRequest,
+            fido2CredentialAssertionRequest = fido2AssertionData?.fido2AssertionRequest,
             isPremium = userState.activeAccount.isPremium,
         )
     },
@@ -150,6 +156,14 @@ class VaultItemListingViewModel @Inject constructor(
                         ),
                     )
                 }
+                ?: state.fido2CredentialAssertionRequest
+                    ?.let { request ->
+                        sendAction(
+                            VaultItemListingsAction.Internal.Fido2AssertionDataReceive(
+                                data = request,
+                            )
+                        )
+                    }
                 ?: observeVaultData()
         }
 
@@ -167,7 +181,8 @@ class VaultItemListingViewModel @Inject constructor(
                 VaultItemListingsAction.Internal.VaultDataReceive(
                     it
                         .filterForAutofillIfNecessary()
-                        .filterForFido2CreationIfNecessary(),
+                        .filterForFido2CreationIfNecessary()
+                        .filterForFido2AssertionIfNecessary(),
                 )
             }
             .onEach(::sendAction)
@@ -273,6 +288,15 @@ class VaultItemListingViewModel @Inject constructor(
                     cipherView = action.selectedCipherView,
                 )
             }
+            ?: specialCircumstanceManager
+                .specialCircumstance
+                ?.toFido2AssertionRequestOrNull()
+                ?.let { request ->
+                    authenticateFido2Credential(
+                        request = request,
+                        cipherView = action.selectedCipherView,
+                    )
+                }
             ?: showFido2ErrorDialog()
     }
 
@@ -475,6 +499,31 @@ class VaultItemListingViewModel @Inject constructor(
                 )
             sendAction(
                 VaultItemListingsAction.Internal.Fido2RegisterCredentialResultReceive(result),
+            )
+        }
+    }
+
+    private fun authenticateFido2Credential(
+        request: Fido2CredentialAssertionRequest,
+        cipherView: CipherView,
+    ) {
+        Log.d(
+            "PASSKEY",
+            "authenticateFido2Credential() called with: request = $request, cipherView = $cipherView"
+        )
+        val activeUserId = authRepository.activeUserId
+            ?: run {
+                showFido2ErrorDialog()
+                return
+            }
+        viewModelScope.launch {
+            val result = fido2CredentialManager.authenticateFido2Credential(
+                userId = activeUserId,
+                request = request,
+                selectedCipherView = cipherView,
+            )
+            sendAction(
+                VaultItemListingsAction.Internal.Fido2AssertionResultReceive(result)
             )
         }
     }
@@ -689,6 +738,14 @@ class VaultItemListingViewModel @Inject constructor(
 
             is VaultItemListingsAction.Internal.Fido2RegisterCredentialResultReceive -> {
                 handleFido2RegisterCredentialResultReceive(action)
+            }
+
+            is VaultItemListingsAction.Internal.Fido2AssertionDataReceive -> {
+                handleFido2AssertionDataReceive(action)
+            }
+
+            is VaultItemListingsAction.Internal.Fido2AssertionResultReceive -> {
+                handleFido2AssertionResultReceive(action)
             }
         }
     }
@@ -986,6 +1043,43 @@ class VaultItemListingViewModel @Inject constructor(
         observeVaultData()
     }
 
+    private fun handleFido2AssertionDataReceive(
+        action: VaultItemListingsAction.Internal.Fido2AssertionDataReceive,
+    ) {
+        Log.d("PASSKEY", "handleFido2AssertionDataReceive() called with: action = $action")
+        mutableStateFlow.update {
+            it.copy(
+                dialogState = VaultItemListingState.DialogState.Loading(
+                    message = R.string.loading.asText(),
+                ),
+            )
+        }
+        val request = action.data
+        val ciphers = vaultRepository.ciphersStateFlow
+            .value
+            .data
+            .orEmpty()
+            .filter { it.isActiveWithFido2Credentials }
+        if (request.cipherId.isNullOrEmpty()) {
+            observeVaultData()
+        } else {
+            val selectedCipher = ciphers.find { it.id == request.cipherId }
+                ?: run {
+                    showFido2ErrorDialog()
+                    return
+                }
+            authenticateFido2Credential(request, selectedCipher)
+        }
+    }
+
+    private fun handleFido2AssertionResultReceive(action: VaultItemListingsAction.Internal.Fido2AssertionResultReceive) {
+        Log.d("PASSKEY", "handleFido2AssertionResultReceive() called with: action = $action")
+        clearDialogState()
+        sendEvent(
+            VaultItemListingEvent.CompleteFido2Assertion(action.result)
+        )
+    }
+
     private fun updateStateWithVaultData(vaultData: VaultData, clearDialogState: Boolean) {
         mutableStateFlow.update { currentState ->
             currentState.copy(
@@ -1009,6 +1103,7 @@ class VaultItemListingViewModel @Inject constructor(
                             fido2CreationData = state.fido2CredentialRequest,
                             fido2CredentialAutofillViews = vaultData
                                 .fido2CredentialAutofillViewList,
+                            fido2CredentialAssertionRequest = state.fido2CredentialAssertionRequest,
                             isPremiumUser = state.isPremium,
                         )
                     }
@@ -1078,6 +1173,23 @@ class VaultItemListingViewModel @Inject constructor(
         }
     }
 
+    private suspend fun DataState<VaultData>.filterForFido2AssertionIfNecessary(): DataState<VaultData> {
+        val request = state.fido2CredentialAssertionRequest ?: return this
+        return this.map { vaultData ->
+            val matchUri = request.origin
+                ?: request.packageName
+                    .toAndroidAppUriString()
+
+            vaultData.copy(
+                cipherViewList = cipherMatchingManager.filterCiphersForMatches(
+                    ciphers = vaultData.cipherViewList,
+                    matchUri = matchUri,
+                ),
+                fido2CredentialAutofillViewList = vaultData.toFido2CredentialAutofillViews(),
+            )
+        }
+    }
+
     /**
      * Decrypt and filter the fido 2 autofill credentials.
      */
@@ -1127,6 +1239,7 @@ data class VaultItemListingState(
     private val isPullToRefreshSettingEnabled: Boolean,
     val autofillSelectionData: AutofillSelectionData? = null,
     val fido2CredentialRequest: Fido2CredentialRequest? = null,
+    val fido2CredentialAssertionRequest: Fido2CredentialAssertionRequest? = null,
     val shouldFinishOnComplete: Boolean = false,
     val hasMasterPassword: Boolean,
     val isPremium: Boolean,
@@ -1548,6 +1661,10 @@ sealed class VaultItemListingEvent {
         val isRequired: Boolean,
         val selectedCipherView: CipherView,
     ) : VaultItemListingEvent()
+
+    data class CompleteFido2Assertion(
+        val result: Fido2AuthenticateCredentialResult,
+    ) : VaultItemListingEvent()
 }
 
 /**
@@ -1757,6 +1874,14 @@ sealed class VaultItemListingsAction {
          */
         data class Fido2RegisterCredentialResultReceive(
             val result: Fido2RegisterCredentialResult,
+        ) : Internal()
+
+        data class Fido2AssertionDataReceive(
+            val data: Fido2CredentialAssertionRequest,
+        ) : Internal()
+
+        data class Fido2AssertionResultReceive(
+            val result: Fido2AuthenticateCredentialResult,
         ) : Internal()
     }
 }

@@ -13,6 +13,7 @@ import com.bitwarden.vault.CollectionView
 import com.bitwarden.vault.FolderView
 import com.x8bit.bitwarden.R
 import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2CredentialRequest
+import com.x8bit.bitwarden.data.autofill.fido2.util.Fido2CredentialAssertionRequest
 import com.x8bit.bitwarden.data.autofill.model.AutofillSelectionData
 import com.x8bit.bitwarden.data.autofill.util.isActiveWithFido2Credentials
 import com.x8bit.bitwarden.data.platform.util.subtitle
@@ -103,6 +104,7 @@ fun VaultData.toViewState(
     isIconLoadingDisabled: Boolean,
     autofillSelectionData: AutofillSelectionData?,
     fido2CreationData: Fido2CredentialRequest?,
+    fido2CredentialAssertionRequest: Fido2CredentialAssertionRequest?,
     fido2CredentialAutofillViews: List<Fido2CredentialAutofillView>?,
     isPremiumUser: Boolean,
 ): VaultItemListingState.ViewState {

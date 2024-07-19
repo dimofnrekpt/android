@@ -1,5 +1,6 @@
 package com.x8bit.bitwarden.ui.vault.feature.itemlisting
 
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -156,6 +157,14 @@ fun VaultItemListingScreen(
                     onError = userVerificationHandlers.onUserVerificationFail,
                     onNotSupported = userVerificationHandlers.onUserVerificationNotSupported,
                 )
+            }
+
+            is VaultItemListingEvent.CompleteFido2Assertion -> {
+                Log.d(
+                    "PASSKEY",
+                    "VaultItemListingScreen: completeFido2Assertion result = ${event.result}"
+                )
+                fido2CompletionManager.completeFido2Assertion(event.result)
             }
         }
     }

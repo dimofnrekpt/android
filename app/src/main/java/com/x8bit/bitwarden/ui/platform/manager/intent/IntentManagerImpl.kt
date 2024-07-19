@@ -56,7 +56,9 @@ const val EXTRA_KEY_USER_ID: String = "user_id"
  *
  * @see IntentManager.createFido2GetCredentialPendingIntent
  */
-private const val EXTRA_KEY_CREDENTIAL_ID: String = "credential_id"
+const val EXTRA_KEY_CREDENTIAL_ID: String = "credential_id"
+
+const val EXTRA_KEY_CIPHER_ID: String = "cipher_id"
 
 /**
  * The default implementation of the [IntentManager] for simplifying the handling of Android
@@ -219,11 +221,13 @@ class IntentManagerImpl(
 
     override fun createFido2GetCredentialPendingIntent(
         action: String,
+        cipherId: String,
         credentialId: String,
         requestCode: Int,
     ): PendingIntent {
         val intent = Intent(action)
             .setPackage(context.packageName)
+            .putExtra(EXTRA_KEY_CIPHER_ID, cipherId)
             .putExtra(EXTRA_KEY_CREDENTIAL_ID, credentialId)
 
         return PendingIntent.getActivity(

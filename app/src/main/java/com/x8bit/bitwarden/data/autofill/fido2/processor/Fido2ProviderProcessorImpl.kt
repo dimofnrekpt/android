@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.os.CancellationSignal
 import android.os.OutcomeReceiver
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.credentials.exceptions.ClearCredentialException
 import androidx.credentials.exceptions.ClearCredentialUnsupportedException
@@ -38,7 +39,6 @@ import com.x8bit.bitwarden.data.vault.repository.VaultRepository
 import com.x8bit.bitwarden.data.vault.repository.model.DecryptFido2CredentialAutofillViewResult
 import com.x8bit.bitwarden.ui.platform.manager.intent.IntentManager
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.util.concurrent.atomic.AtomicInteger
@@ -70,21 +70,23 @@ class Fido2ProviderProcessorImpl(
         cancellationSignal: CancellationSignal,
         callback: OutcomeReceiver<BeginCreateCredentialResponse, CreateCredentialException>,
     ) {
-        cancellationSignal.setOnCancelListener {
-            callback.onError(CreateCredentialCancellationException())
-            scope.cancel()
-        }
-
         val userId = authRepository.activeUserId
         if (userId == null) {
             callback.onError(CreateCredentialUnknownException("Active user is required."))
             return
         }
 
-        scope.launch {
+        val createCredentialJob = scope.launch {
             processCreateCredentialRequest(request = request)
                 ?.let { callback.onResult(it) }
                 ?: callback.onError(CreateCredentialUnknownException())
+        }
+
+        cancellationSignal.setOnCancelListener {
+            callback.onError(CreateCredentialCancellationException())
+            if (createCredentialJob.isActive) {
+                createCredentialJob.cancel()
+            }
         }
     }
 
@@ -143,10 +145,6 @@ class Fido2ProviderProcessorImpl(
         cancellationSignal: CancellationSignal,
         callback: OutcomeReceiver<BeginGetCredentialResponse, GetCredentialException>,
     ) {
-        cancellationSignal.setOnCancelListener {
-            callback.onError(GetCredentialCancellationException())
-            scope.cancel()
-        }
 
         // If the user is not logged in, return an error.
         val userState = authRepository.userStateFlow.value
@@ -174,7 +172,7 @@ class Fido2ProviderProcessorImpl(
         }
 
         // Otherwise, find all matching credentials from the current vault.
-        scope.launch {
+        val attestationJob = scope.launch {
             try {
                 val credentialEntries = getMatchingFido2CredentialEntries(
                     userId = userState.activeUserId,
@@ -187,8 +185,16 @@ class Fido2ProviderProcessorImpl(
                     ),
                 )
             } catch (e: GetCredentialUnknownException) {
+                Log.e("PASSKEY", "processGetCredentialRequest: caught error", e)
                 callback.onError(e)
             }
+        }
+        cancellationSignal.setOnCancelListener {
+            Log.d("PASSKEY", "processGetCredentialRequest: cancelling job")
+            if (attestationJob.isActive) {
+                attestationJob.cancel()
+            }
+            callback.onError(GetCredentialCancellationException())
         }
     }
 
@@ -215,8 +221,12 @@ class Fido2ProviderProcessorImpl(
                     //        relyingPartyId,
                     //    )
                     //    .fold(
-                    //        onSuccess = { it.toCredentialEntries(option) },
+                    //        onSuccess = {
+                    //            Log.d("PASSKEY", "getMatchingFido2CredentialEntries: onSuccess $it")
+                    //            it.toCredentialEntries(option)
+                    //        },
                     //        onFailure = {
+                    //            Log.e("PASSKEY", "getMatchingFido2CredentialEntries: onFailure", it)
                     //            throw GetCredentialUnknownException("Error decrypting credentials.")
                     //        },
                     //    )
@@ -250,8 +260,9 @@ class Fido2ProviderProcessorImpl(
 
     private fun List<Fido2CredentialAutofillView>.toCredentialEntries(
         option: BeginGetPublicKeyCredentialOption,
-    ): List<CredentialEntry> =
-        this
+    ): List<CredentialEntry> {
+        Log.d("PASSKEY", "toCredentialEntries() called with: option = $option")
+        return this
             .map {
                 PublicKeyCredentialEntry
                     .Builder(
@@ -260,6 +271,7 @@ class Fido2ProviderProcessorImpl(
                         pendingIntent = intentManager
                             .createFido2GetCredentialPendingIntent(
                                 action = GET_PASSKEY_INTENT,
+                                cipherId = it.cipherId,
                                 credentialId = it.credentialId.toString(),
                                 requestCode = requestCode.getAndIncrement(),
                             ),
@@ -267,6 +279,7 @@ class Fido2ProviderProcessorImpl(
                     )
                     .build()
             }
+    }
 
     override fun processClearCredentialStateRequest(
         request: ProviderClearCredentialStateRequest,

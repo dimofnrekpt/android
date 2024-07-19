@@ -1,10 +1,12 @@
 package com.x8bit.bitwarden.data.autofill.fido2.manager
 
 import com.bitwarden.vault.CipherView
+import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2AuthenticateCredentialResult
 import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2CredentialRequest
 import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2RegisterCredentialResult
 import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2ValidateOriginResult
 import com.x8bit.bitwarden.data.autofill.fido2.model.PublicKeyCredentialCreationOptions
+import com.x8bit.bitwarden.data.autofill.fido2.util.Fido2CredentialAssertionRequest
 
 /**
  * Responsible for managing FIDO 2 credential registration and authentication.
@@ -39,4 +41,13 @@ interface Fido2CredentialManager {
         fido2CredentialRequest: Fido2CredentialRequest,
         selectedCipherView: CipherView,
     ): Fido2RegisterCredentialResult
+
+    /**
+     * Authenticate a FIDO credential against a cipher in the users vault.
+     */
+    suspend fun authenticateFido2Credential(
+        userId: String,
+        request: Fido2CredentialAssertionRequest,
+        selectedCipherView: CipherView,
+    ): Fido2AuthenticateCredentialResult
 }

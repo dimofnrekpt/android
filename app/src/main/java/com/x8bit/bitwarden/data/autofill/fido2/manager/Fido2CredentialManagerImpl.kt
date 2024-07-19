@@ -1,15 +1,18 @@
 package com.x8bit.bitwarden.data.autofill.fido2.manager
 
+import android.util.Log
 import androidx.credentials.provider.CallingAppInfo
 import com.bitwarden.fido.ClientData
 import com.bitwarden.sdk.Fido2CredentialStore
 import com.bitwarden.vault.CipherView
 import com.x8bit.bitwarden.data.autofill.fido2.datasource.network.model.DigitalAssetLinkResponseJson
 import com.x8bit.bitwarden.data.autofill.fido2.datasource.network.service.DigitalAssetLinkService
+import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2AuthenticateCredentialResult
 import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2CredentialRequest
 import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2RegisterCredentialResult
 import com.x8bit.bitwarden.data.autofill.fido2.model.Fido2ValidateOriginResult
 import com.x8bit.bitwarden.data.autofill.fido2.model.PublicKeyCredentialCreationOptions
+import com.x8bit.bitwarden.data.autofill.fido2.util.Fido2CredentialAssertionRequest
 import com.x8bit.bitwarden.data.platform.manager.AssetManager
 import com.x8bit.bitwarden.data.platform.util.asFailure
 import com.x8bit.bitwarden.data.platform.util.asSuccess
@@ -19,8 +22,10 @@ import com.x8bit.bitwarden.data.platform.util.getAppSigningSignatureFingerprint
 import com.x8bit.bitwarden.data.platform.util.getSignatureFingerprintAsHexString
 import com.x8bit.bitwarden.data.platform.util.validatePrivilegedApp
 import com.x8bit.bitwarden.data.vault.datasource.sdk.VaultSdkSource
+import com.x8bit.bitwarden.data.vault.datasource.sdk.model.AuthenticateFido2CredentialRequest
 import com.x8bit.bitwarden.data.vault.datasource.sdk.model.RegisterFido2CredentialRequest
 import com.x8bit.bitwarden.data.vault.datasource.sdk.util.toAndroidAttestationResponse
+import com.x8bit.bitwarden.data.vault.datasource.sdk.util.toAndroidFido2PublicKeyCredential
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -103,6 +108,58 @@ class Fido2CredentialManagerImpl(
         } catch (e: IllegalArgumentException) {
             null
         }
+
+    override suspend fun authenticateFido2Credential(
+        userId: String,
+        request: Fido2CredentialAssertionRequest,
+        selectedCipherView: CipherView,
+    ): Fido2AuthenticateCredentialResult {
+        Log.d(
+            "PASSKEY",
+            "authenticateFido2Credential() called with: userId = $userId, request = $request, selectedCipherView = $selectedCipherView"
+        )
+        val clientData = if (request.callingAppInfo.isOriginPopulated()) {
+            request.callingAppInfo.getAppSigningSignatureFingerprint()
+                ?.let { ClientData.DefaultWithCustomHash(hash = it) }
+                ?: return Fido2AuthenticateCredentialResult.Error
+        } else {
+            ClientData.DefaultWithExtraData(
+                androidPackageName = request
+                    .callingAppInfo
+                    .getAppOrigin(),
+            )
+        }
+        return vaultSdkSource.authenticateFido2Credential(
+            request = AuthenticateFido2CredentialRequest(
+                userId = userId,
+                origin = request.callingAppInfo.origin
+                    ?: request.callingAppInfo.getAppOrigin(),
+                requestJson = """{"publicKey": ${request.requestJson}}""",
+                clientData = clientData,
+                selectedCipherView = selectedCipherView,
+                isUserVerificationSupported = true,
+            ),
+            fido2CredentialStore = this,
+        )
+            .map {
+                Log.d("PASSKEY", "vaultSdkSource.authenticateFido2Credential $it")
+                it.toAndroidFido2PublicKeyCredential()
+            }
+            .mapCatching {
+                Log.d("PASSKEY", "fido2AssertionResponse $it")
+                json.encodeToString(it)
+            }
+            .fold(
+                onSuccess = {
+                    Log.d("PASSKEY", "authenticateFido2Credential: onSuccess $it")
+                    Fido2AuthenticateCredentialResult.Success(it)
+                },
+                onFailure = {
+                    Log.e("PASSKEY", "authenticateFido2Credential: onFailure $it", it)
+                    Fido2AuthenticateCredentialResult.Error
+                }
+            )
+    }
 
     private suspend fun validateCallingApplicationAssetLinks(
         fido2CredentialRequest: Fido2CredentialRequest,
